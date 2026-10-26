@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kisan Mitra Field Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Telugu:wght@400;600&display=swap">
+<style>
+/* Layout: a field console. Demo strip on top, then three working columns
+   (what the field reports -> what the AI concludes -> what the farmer hears), impact + data feed below. */
+:root{
+  --bg:#F4F6F1; --panel:#FFFFFF; --ink:#18221A; --muted:#5D6A5F; --line:#DCE3D8; --soft:#EAF0E6;
+  --leaf:#2E6B34; --leaf-ink:#FFFFFF; --water:#1F6AA8; --water-soft:#DCEAF6; --soil:#A4652A; --soil-soft:#F3E6D7;
+  --good:#2E7D32; --warn:#B26A00; --bad:#C0392B; --good-bg:#E3F1E2; --warn-bg:#FBEFD9; --bad-bg:#F9E1DE;
+  --phone:#101611; --phone-ink:#EEF3EC; --bubble:#1E2A20;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --f-te:"Noto Sans Telugu", "Nirmala UI", "Gautami", "Telugu Sangam MN", sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1510; --panel:#172019; --ink:#E6EDE4; --muted:#9AA898; --line:#2A362C; --soft:#1E2A20;
+  --leaf:#6CBF73; --leaf-ink:#0F1510; --water:#6BB0E8; --water-soft:#18324A; --soil:#E0A262; --soil-soft:#3A2A1A;
+  --good:#7CCB80; --warn:#E9B04F; --bad:#F08A7E; --good-bg:#1D3320; --warn-bg:#3A2D14; --bad-bg:#3F1D1A;
+  --phone:#060906; --phone-ink:#EEF3EC; --bubble:#1A251C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1510; --panel:#172019; --ink:#E6EDE4; --muted:#9AA898; --line:#2A362C; --soft:#1E2A20;
+  --leaf:#6CBF73; --leaf-ink:#0F1510; --water:#6BB0E8; --water-soft:#18324A; --soil:#E0A262; --soil-soft:#3A2A1A;
+  --good:#7CCB80; --warn:#E9B04F; --bad:#F08A7E; --good-bg:#1D3320; --warn-bg:#3A2D14; --bad-bg:#3F1D1A;
+  --phone:#060906; --phone-ink:#EEF3EC; --bubble:#1A251C; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);margin:0}
+.wrap{max-width:1440px;margin:0 auto;padding-block:18px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+.te{font-family:var(--f-te)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.label{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--water);outline-offset:2px}
+
+/* header */
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:42px;height:42px;border-radius:12px;background:var(--leaf);display:grid;place-items:center;flex:none}
+.brand h1{font-size:26px;line-height:1.1}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.clock{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.clock .time{font-family:var(--f-mono);font-size:15px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 12px;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--leaf);color:var(--leaf-ink);border-color:var(--leaf)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:transparent;padding:7px 11px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+/* scenario strip */
+.scen{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px 14px;display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap}
+@media (min-width:900px){.scen{position:sticky;top:8px;z-index:20;box-shadow:0 6px 16px -10px rgba(0,0,0,.35)}}
+.scen .chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:5px 11px;font-size:13px;font-weight:500}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.banner{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:8px 12px;font-size:13px}
+
+/* columns */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr);grid-template-areas:"in eng out";gap:20px;align-items:start}
+.col-in{grid-area:in}.col-eng{grid-area:eng}.col-out{grid-area:out}
+@media (max-width:1180px){.cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"in out" "eng eng"}}
+@media (max-width:760px){.cols{grid-template-columns:minmax(0,1fr);grid-template-areas:"out" "in" "eng"}}
+.col{display:grid;gap:16px;min-width:0;align-content:start}
+.colhead{display:flex;align-items:baseline;gap:10px;min-height:34px}
+.colhead .step{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.colhead h2{font-size:19px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.phonecard{display:grid;gap:12px}
+.phonecard .toast{margin:-4px 0 0}
+.card h3{font-size:15.5px;display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.sub{color:var(--muted);font-size:12.5px;margin:2px 0 10px}
+
+/* inputs */
+.field{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:7px 0;border-top:1px solid var(--soft)}
+.field:first-of-type{border-top:0}
+.field label{font-size:13.5px}
+.field output{font-family:var(--f-mono);font-size:13.5px;font-variant-numeric:tabular-nums}
+.field input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--leaf)}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.sel{display:grid;gap:3px;font-size:12.5px;color:var(--muted);min-width:0}
+.sel select{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 8px;color:var(--ink);font-size:14px;width:100%;min-width:0}
+.probes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:6px}
+.probe{border-radius:10px;background:var(--water-soft);padding:8px;text-align:center}
+.probe .v{font-family:var(--f-mono);font-size:18px;font-weight:500;color:var(--water)}
+.probe .n{font-size:11.5px;color:var(--muted)}
+.probe.bad{background:var(--bad-bg)}.probe.bad .v{color:var(--bad)}
+.toggle{display:flex;gap:8px;align-items:center;font-size:13.5px;padding-top:8px}
+.toggle input{accent-color:var(--bad);width:16px;height:16px}
+
+/* AI engine */
+.pill{font-family:var(--f-body);font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;letter-spacing:.02em;white-space:nowrap}
+.pill.good{background:var(--good-bg);color:var(--good)}.pill.warn{background:var(--warn-bg);color:var(--warn)}.pill.bad{background:var(--bad-bg);color:var(--bad)}.pill.info{background:var(--water-soft);color:var(--water)}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.fact{background:var(--soft);border-radius:10px;padding:8px 10px}
+.fact .k{font-size:11.5px;color:var(--muted)}
+.fact .v{font-family:var(--f-mono);font-size:15px;font-weight:500}
+.npk{display:grid;gap:10px}
+.bar{display:grid;grid-template-columns:22px minmax(0,1fr) 110px;gap:10px;align-items:center;font-size:13px}
+.bar b{font-family:var(--f-mono)}
+.track{position:relative;height:14px;background:var(--soft);border-radius:7px}
+.track .band{position:absolute;top:0;bottom:0;background:var(--good-bg);border:1px dashed var(--good);border-radius:7px}
+.track .dot{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
+.bar .val{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.health{display:grid;gap:6px}
+.hrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13.5px;padding:6px 0;border-top:1px solid var(--soft)}
+.hrow:first-child{border-top:0}
+.decision{border-radius:10px;padding:10px 12px;margin-top:10px;font-size:14px}
+.decision.good{background:var(--good-bg)}.decision.warn{background:var(--warn-bg)}.decision.bad{background:var(--bad-bg)}.decision.info{background:var(--water-soft)}
+.decision strong{display:block;font-family:var(--f-display);font-size:16px;margin-bottom:2px}
+
+/* weather module */
+.wxbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
+.wxbar select{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 8px;color:var(--ink);font-size:13.5px}
+.wxstatus{font-size:12.5px;color:var(--muted);margin:2px 0 6px}
+.wxstatus.warn{color:var(--warn)}
+.days{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.day{background:var(--soft);border-radius:10px;padding:8px 10px}
+.day .k{font-size:11.5px;color:var(--muted)}
+.day .v{font-family:var(--f-mono);font-size:14px;font-weight:500}
+.day .r{font-family:var(--f-mono);font-size:12.5px;color:var(--water)}
+:disabled{cursor:not-allowed;opacity:.55}
+
+.imdform{background:var(--soft);border-radius:10px;padding:10px 12px;margin:6px 0 8px}
+.imdform a{color:var(--water)}
+.imdrow{display:grid;grid-template-columns:70px repeat(2,minmax(0,64px)) minmax(0,1fr);gap:6px;align-items:center;margin:4px 0;font-size:13px}
+.imdrow input,.imdrow select,.imdform input[type=date]{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 6px;color:var(--ink);font-size:13px;min-width:0;width:100%}
+.imdhead{display:grid;grid-template-columns:70px repeat(2,minmax(0,64px)) minmax(0,1fr);gap:6px;font-size:11.5px;color:var(--muted)}
+.refline{font-size:12.5px;color:var(--muted);border-left:3px solid var(--line);padding:4px 0 4px 10px;margin-top:10px}
+.refline.live{border-left-color:var(--good);color:var(--ink)}
+.refline a{color:var(--water)}
+.refline.flash{animation:flash 1.4s ease-out}
+@keyframes flash{from{background:var(--good-bg)}to{background:transparent}}
+.msg .ref{font-size:12px;opacity:.9;margin-top:6px;padding:5px 8px;border-radius:8px;background:rgba(108,191,115,.14)}
+
+/* phone */
+.phone{background:var(--phone);color:var(--phone-ink);border-radius:30px;padding:14px 12px 16px;max-width:400px;margin:0 auto;width:100%;box-shadow:0 20px 40px -24px rgba(0,0,0,.5)}
+.phone .bar-top{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:11.5px;opacity:.75;padding:0 8px 10px}
+.app-head{display:flex;align-items:center;gap:10px;padding:0 6px 10px;border-bottom:1px solid #2a372c}
+.app-head .av{width:30px;height:30px;border-radius:9px;background:#6CBF73;display:grid;place-items:center}
+.app-head b{font-family:var(--f-display);font-size:15px}
+.app-head span{font-size:11.5px;opacity:.7;display:block}
+.msgs{display:grid;gap:10px;padding:12px 4px 4px}
+.msg{background:var(--bubble);border-radius:14px;padding:11px 12px}
+.msg .tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:4px;display:flex;gap:6px;align-items:center}
+.msg .tag .d{width:8px;height:8px;border-radius:50%}
+.msg .te{font-size:16.5px;line-height:1.55}
+.msg .en{font-size:13.5px;opacity:.8;margin-top:3px}
+.msg .why{font-size:12.5px;opacity:.75;margin-top:6px;border-top:1px dashed #3a473c;padding-top:6px}
+.msg .acts{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.msg .acts button{border:1px solid #3a473c;background:transparent;color:var(--phone-ink);border-radius:8px;padding:5px 10px;font-size:13px}
+.msg .acts button.ok{background:#6CBF73;color:#0F1510;border-color:#6CBF73;font-weight:600}
+.sms{margin-top:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-family:var(--f-mono);font-size:12.5px;white-space:pre-wrap;word-break:break-word}
+.sms-meta{font-size:11.5px;color:var(--muted);margin-top:4px}
+.toast{min-height:22px;font-size:13px;color:var(--good);text-align:center;margin-top:8px}
+
+/* bottom */
+.bottom{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
+@media (max-width:900px){.bottom{grid-template-columns:minmax(0,1fr)}}
+.impact{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:620px){.impact{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--soft);border-radius:12px;padding:12px}
+.kpi .v{font-family:var(--f-display);font-size:26px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi .k{font-size:12.5px;color:var(--muted)}
+.kpi.w .v{color:var(--water)}.kpi.s .v{color:var(--soil)}.kpi.e .v{color:var(--leaf)}
+.sdg{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.sdg span{font-size:11.5px;font-weight:600;border-radius:6px;padding:3px 8px;color:#fff}
+.feed{font-family:var(--f-mono);font-size:12px;background:var(--soft);border-radius:10px;padding:10px;max-height:212px;overflow:auto;white-space:pre;line-height:1.55}
+.foot{color:var(--muted);font-size:12.5px;max-width:110ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 21V11" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M12 12c0-4 3-7 8-7 0 5-3 8-8 7Z" fill="#fff"/><path d="M12 15c0-3-2.5-5.5-7-5.5 0 4 2.5 6.5 7 5.5Z" fill="#fff" opacity=".75"/></svg>
+      </div>
+      <div>
+        <h1>Kisan Mitra</h1>
+        <p>AI-powered soil &amp; water intelligence for small farmers · Field node KM-01 (simulated), Chandragiri, Tirupati</p>
+      </div>
+    </div>
+    <div class="clock">
+      <span class="label">Simulated time</span>
+      <span class="time" id="clock">–</span>
+      <button class="btn primary" id="play" type="button" aria-pressed="true">Pause</button>
+      <div class="seg" role="group" aria-label="Simulation speed">
+        <button type="button" data-speed="1" aria-pressed="true">1 h / 2 s</button>
+        <button type="button" data-speed="4" aria-pressed="false">4×</button>
+      </div>
+      <div class="seg" role="group" aria-label="Colour theme">
+        <button type="button" data-theme-pick="auto" aria-pressed="true" title="Follow system setting">Auto</button>
+        <button type="button" data-theme-pick="light" aria-pressed="false">&#9728; Light</button>
+        <button type="button" data-theme-pick="dark" aria-pressed="false">&#9790; Dark</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="scen" aria-label="Demo scenarios">
+    <span class="label">Demo scenario</span>
+    <div class="chips" id="scenarios"></div>
+  </section>
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="cols">
+    <!-- 1 INPUTS -->
+    <section class="col col-in" aria-labelledby="h-in">
+      <div class="colhead"><span class="step">01</span><h2 id="h-in">Field &amp; sensors</h2></div>
+
+      <div class="card">
+        <h3>Soil sensors <span class="pill info" id="pkt">LoRa · −97 dBm</span></h3>
+        <p class="sub">Capacitive moisture probes at 15 cm, NPK probe, soil temperature. One reading every 30 min.</p>
+        <div class="probes" id="probes"></div>
+        <div class="field"><label for="in-m">Soil moisture (true average)</label><output id="o-m"></output><input type="range" id="in-m" min="5" max="46" step="0.1"></div>
+        <div class="field"><label for="in-n">Nitrogen (N)</label><output id="o-n"></output><input type="range" id="in-n" min="100" max="500" step="1"></div>
+        <div class="field"><label for="in-p">Phosphorus (P)</label><output id="o-p"></output><input type="range" id="in-p" min="2" max="90" step="1"></div>
+        <div class="field"><label for="in-k">Potassium (K)</label><output id="o-k"></output><input type="range" id="in-k" min="40" max="400" step="1"></div>
+        <label class="toggle"><input type="checkbox" id="in-fault"> Simulate a faulty probe (P2)</label>
+      </div>
+
+      <div class="card">
+        <h3>Weather <span class="pill info">72-h forecast</span></h3>
+        <p class="sub">Air sensor (DHT22) plus the 72-hour forecast for the village.</p>
+        <div class="field"><label for="in-t">Max air temperature today</label><output id="o-t"></output><input type="range" id="in-t" min="24" max="42" step="0.5"></div>
+        <div class="field"><label for="in-r">Rain expected</label><output id="o-r"></output><input type="range" id="in-r" min="0" max="60" step="1"></div>
+        <div class="field"><label for="in-rh">Rain starts in</label><output id="o-rh"></output><input type="range" id="in-rh" min="1" max="70" step="1"></div>
+      </div>
+
+      <div class="card">
+        <h3>Farm profile</h3>
+        <div class="row2" style="margin-top:8px">
+          <label class="sel">Crop<select id="in-crop"></select></label>
+          <label class="sel">Field size<select id="in-area"><option value="0.5" selected>0.5 acre</option><option value="1">1 acre</option><option value="2">2 acres</option></select></label>
+          <label class="sel">Pump flow<select id="in-flow"><option value="3">3 L/s (1 HP)</option><option value="6">6 L/s (3 HP)</option><option value="9" selected>9 L/s (5 HP)</option></select></label>
+          <label class="sel">Day of season<select id="in-day"></select></label>
+        </div>
+        <p class="sub" id="stage" style="margin:10px 0 0"></p>
+      </div>
+
+      <div class="card">
+        <h3>Sensor Health Monitor <span class="pill info">Cross-probe check</span></h3>
+        <p class="sub">Catches broken or drifting sensors so bad data never becomes bad advice.</p>
+        <div class="health" id="health"></div>
+      </div>
+    </section>
+
+    <!-- 2 AI ENGINE -->
+    <section class="col col-eng" aria-labelledby="h-ai">
+      <div class="colhead"><span class="step">02</span><h2 id="h-ai">Weather &amp; water</h2></div>
+
+      <div class="card" id="wx-card">
+        <h3>Weather Forecast <span class="pill info" id="wx-src">Simulated</span></h3>
+        <p class="sub">72-hour temperature and rain. Live syncs a real forecast; IMD takes the official bulletin. Soil sensors stay simulated.</p>
+        <div class="wxbar">
+          <div class="seg" role="group" aria-label="Weather source">
+            <button type="button" data-wx="sim" aria-pressed="true">Simulated</button>
+            <button type="button" data-wx="live" aria-pressed="false">Live</button>
+            <button type="button" data-wx="imd" aria-pressed="false" title="Enter the official IMD forecast">IMD</button>
+          </div>
+          <select id="wx-loc" aria-label="Location"><option value="tirupati">Tirupati</option><option value="chittoor">Chittoor</option><option value="madanapalle">Madanapalle</option></select>
+          <select id="wx-prov" aria-label="Forecast provider"><option value="auto">Auto</option><option value="accuweather">AccuWeather</option><option value="open-meteo">Open-Meteo</option></select>
+          <button type="button" class="btn" id="wx-sync" disabled>Sync now</button>
+        </div>
+        <div class="imdform" id="imd-form" hidden>
+          <p class="sub" style="margin:0 0 6px">Enter the values from the <b>India Meteorological Department</b> district forecast
+            (<a href="https://mausam.imd.gov.in" target="_blank" rel="noopener">mausam.imd.gov.in</a> &rarr; Forecast &rarr; District-wise) or your KVK / District Agromet Unit advisory (issued Tuesdays and Fridays).
+            The values below are placeholders until you replace them.</p>
+          <div class="imdhead"><span></span><span>Max °C</span><span>Min °C</span><span>IMD rain category (24 h)</span></div>
+          <div id="imd-rows"></div>
+          <div class="row" style="margin-top:8px;align-items:center">
+            <label class="sub" style="margin:0">Bulletin issued on <input type="date" id="imd-date"></label>
+            <button type="button" class="btn primary" id="imd-apply">Apply IMD forecast</button>
+          </div>
+          <p class="sub" style="margin:6px 0 0">IMD gives rain as a category, not mm. Irrigation uses the category's lower bound, the fertiliser-wash-off hold uses the upper bound (the cautious choice for each). Rain is spread evenly across each day.</p>
+        </div>
+        <div class="wxstatus" id="wx-status"></div>
+        <svg class="chart" id="wx-chart" viewBox="0 0 640 230" role="img" aria-label="72 hour temperature and rain forecast"></svg>
+        <div class="legend">
+          <span><i style="background:var(--soil)"></i>Temperature (°C)</span>
+          <span><i style="background:var(--water);height:9px;opacity:.55"></i>Rain (mm/h)</span>
+        </div>
+        <div class="days" id="wx-days"></div>
+      </div>
+
+      <div class="card">
+        <h3>Irrigation Forecaster <span class="pill info">FAO-56 water balance · LSTM planned</span></h3>
+        <p class="sub">Predicts soil moisture for the next 72 hours from crop water use and the rain forecast.</p>
+        <svg class="chart" id="chart" viewBox="0 0 640 270" role="img" aria-label="Soil moisture history and 72 hour forecast"></svg>
+        <div class="legend">
+          <span><i style="background:var(--ink)"></i>Measured</span>
+          <span><i style="background:var(--water);opacity:.6"></i>Forecast, no irrigation</span>
+          <span><i style="background:var(--leaf)"></i>With Kisan Mitra advice</span>
+          <span><i style="background:var(--good-bg);border:1px dashed var(--good);height:9px"></i>Healthy range</span>
+          <span><i style="background:var(--water);height:9px;opacity:.35"></i>Rain (mm)</span>
+        </div>
+        <div class="facts" id="facts"></div>
+        <div class="decision" id="dec-water"></div>
+        <div class="refline" id="ref-water"></div>
+      </div>
+    </section>
+
+    <!-- 3 OUTPUT -->
+    <section class="col col-out" aria-labelledby="h-out">
+      <div class="colhead"><span class="step">03</span><h2 id="h-out">Advice for the farmer</h2>
+        <div class="seg" role="group" aria-label="Language" style="margin-left:auto">
+          <button type="button" data-lang="te" aria-pressed="true">తెలుగు</button>
+          <button type="button" data-lang="en" aria-pressed="false">English</button>
+        </div>
+      </div>
+      <div class="card phonecard">
+      <div class="phone">
+        <div class="bar-top"><span id="ph-time">10:00</span><span>4G ▪▪▪ · 82%</span></div>
+        <div class="app-head">
+          <div class="av" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 21V11" stroke="#0F1510" stroke-width="2.4" stroke-linecap="round"/><path d="M12 12c0-4 3-7 8-7 0 5-3 8-8 7Z" fill="#0F1510"/></svg></div>
+          <div><b>Kisan Mitra</b><span id="ph-sub">Ramaiah's field · Paddy</span></div>
+        </div>
+        <div class="msgs" id="msgs"></div>
+      </div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <div>
+        <div class="label" style="margin-bottom:6px">Same advice as SMS (for basic phones)</div>
+        <div class="sms" id="sms"></div>
+        <div class="sms-meta" id="sms-meta"></div>
+      </div>
+      </div>
+
+      <div class="card">
+        <h3>Nutrient Advisor <span class="pill info">ICAR-style dose caps · XGBoost planned</span></h3>
+        <p class="sub">Compares NPK readings with what this crop needs at this growth stage. Green band = target range (kg/ha, Soil Health Card units).</p>
+        <div class="npk" id="npk"></div>
+        <div class="decision" id="dec-nut"></div>
+        <div class="refline" id="ref-nut"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="bottom">
+    <section class="card" aria-labelledby="h-imp">
+      <h3 id="h-imp">Sustainability impact, this season <span class="pill good" id="fb">Feedback: 0 actions logged</span></h3>
+      <p class="sub">Compared with usual practice (fixed flood irrigation and blanket urea), for this field. Seeded with the season so far, and grows as the farmer follows advice. Estimates only: to be validated in the pilot.</p>
+      <div class="impact">
+        <div class="kpi w"><div class="v" id="k-w">–</div><div class="k">litres of water saved</div></div>
+        <div class="kpi s"><div class="v" id="k-u">–</div><div class="k">kg urea avoided</div></div>
+        <div class="kpi e"><div class="v" id="k-e">–</div><div class="k">kWh pumping energy saved</div></div>
+        <div class="kpi e"><div class="v" id="k-c">–</div><div class="k">kg CO₂e avoided</div></div>
+      </div>
+      <div class="sdg" aria-label="Linked Sustainable Development Goals">
+        <span style="background:#C58A00">SDG 2 Zero Hunger</span><span style="background:#1A9BC0">SDG 6 Clean Water</span><span style="background:#9C7224">SDG 12 Responsible Use</span><span style="background:#3F7E44">SDG 13 Climate</span><span style="background:#3E9A22">SDG 15 Life on Land</span>
+      </div>
+    </section>
+    <section class="card" aria-labelledby="h-feed">
+      <h3 id="h-feed">Live data feed <span class="pill info" id="bat">Battery 3.98 V</span></h3>
+      <p class="sub">Packets the field node sends to the cloud over LoRa / GSM (simulated).</p>
+      <div class="feed" id="feed" tabindex="0" aria-label="Recent sensor packets"></div>
+    </section>
+  </div>
+
+  <p class="foot">Sensor data is simulated. Every decision comes from the Kisan Mitra API, so real ESP32 readings can replace the simulator later. How it works: water use = reference evapotranspiration (Hargreaves) × crop coefficient (FAO-56) + field losses; irrigation is advised when the forecast drops below the crop's refill point within 24 h and no useful rain (8 mm) is due. Fertiliser doses come from the gap to the crop-stage target band, capped per application, and are held back when 15 mm of rain is due within 48 h. Crop parameters are illustrative and Telugu text awaits native-speaker review. Impact: 0.2 kWh per 1,000 L pumped (≈30 m lift), 0.71 kg CO₂ per kWh, 4.2 kg CO₂e per kg urea.</p>
+</div>
+
+<script>
+(() => {
+"use strict";
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = n => Math.round(n).toLocaleString("en-IN");
+const fmtL = n => n >= 100000 ? (n/100000).toFixed(n >= 1e6 ? 1 : 2).replace(/\.?0+$/,"") + " lakh" : fmt(n);
+const ACRE = 4047, HA_PER_ACRE = 0.4047, OFF = [0.6, -0.4, -0.2];
+const STAGE_KEYS = ["initial","development","mid","late"];
+const STAGE_NAMES = ["Establishment","Vegetative","Flowering / panicle","Maturity"];
+const TONE = {
+  irrigate_now:["#F08A7E","Water · urgent"], irrigate_evening:["#E9B04F","Water"], wait_rain:["#6BB0E8","Water · save"], water_ok:["#7CCB80","Water"],
+  fert_apply:["#E0A262","Fertiliser"], fert_hold:["#6BB0E8","Fertiliser · wait"], fert_ok:["#7CCB80","Fertiliser"],
+  check_sensor:["#F08A7E","Device"], no_data:["#F08A7E","Device"],
+};
+const REASON = {missing_data:"missing data", out_of_range:"out of range", stuck:"stuck reading", disagrees_with_other_probes:"disagrees with other probes"};
+
+let CROPS = {};
+const stageIdx = (c, d) => { const f = d / CROPS[c].season_days; return f < .17 ? 0 : f < .45 ? 1 : f < .75 ? 2 : 3; };
+
+/* ---------- state ---------- */
+const now0 = new Date(); now0.setHours(10, 0, 0, 0);
+const S = {
+  crop:"paddy", day:40, area:0.5, flow:9,
+  t:0, startDate: now0,
+  theta:36, N:300, P:22, K:180, tmax:33, fault:false,
+  rain:null,       // {at: abs hour, mm, dur}
+  hist:[],         // [{t, v}] true moisture, one per simulated hour
+  feed:[], bat:3.98,
+  running:true, speed:1, lang:"te",
+  wx:{mode:"sim", ui:"sim", live:null, loc:"tirupati", prov:"auto", syncTimer:null, err:null},
+  saved:{w:0,u:0}, fbDone:0, fbSkip:0, handled:{},
+};
+let last = null;          // last API response (fresh for current inputs) or null while a request is in flight
+let seq = 0;
+
+/* ---------- request building ---------- */
+const nz = (t, i) => ((((Math.sin(t * 12.9898 + i * 78.233) * 43758.5453) % 1) + 1) % 1 - 0.5) * 0.6;
+const pad = n => String(n).padStart(2, "0");
+const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+const clockAt = h => new Date(S.startDate.getTime() + h * 3600e3);
+
+function probeReadings(){
+  const vals = S.hist.slice(-5).map(p => ({t:p.t, v:p.v})).concat([{t:S.t, v:S.theta}]);
+  return [0,1,2].map(i => ({id:"P" + (i+1), readings: vals.map(p => +((S.fault && i === 1) ? 2.0 + Math.abs(nz(p.t, i)) : p.v + OFF[i] + nz(p.t, i)).toFixed(2))}));
+}
+const isLive = () => S.wx.mode !== "sim" && !!S.wx.live;   // live feed or IMD entry
+const liveSlice = (key) => { const a = S.wx.live[key], o = S.t, out = a.slice(o, o + 72); while (out.length < 72) out.push(key === "temp_c_hourly" ? out[out.length-1] ?? 25 : 0); return out; };
+function rainHourly(){
+  if (isLive()) return liveSlice("rain_mm_hourly");
+  const out = new Array(72).fill(0), r = S.rain; if (!r) return out;
+  for (let h = 0; h < 72; h++){ const a = S.t + h; if (a >= r.at && a < r.at + r.dur) out[h] = r.mm / r.dur; }
+  return out;
+}
+function simTemp(abs){ const hod = clockAt(abs).getHours(), tmin = S.tmax - 9; return tmin + (S.tmax - tmin) * Math.max(0, Math.sin(Math.PI * (hod - 6) / 14)); }
+function weatherSeries(){   // 72 hourly points from now, from the live feed or from the sliders
+  const rain = rainHourly(), temp = isLive() ? liveSlice("temp_c_hourly") : Array.from({length:72}, (_, h) => simTemp(S.t + h));
+  const prob = isLive() && S.wx.live.precip_prob ? liveSlice("precip_prob") : null;
+  return {temp, rain, prob};
+}
+function weatherForRequest(){
+  if (!isLive()) return {start:isoLocal(clockAt(S.t)), tmax:[S.tmax,S.tmax,S.tmax], tmin:[S.tmax-9,S.tmax-9,S.tmax-9], rain_mm_hourly: rainHourly()};
+  const w = weatherSeries(), win = k => w.temp.slice(k*24, k*24 + 24);
+  const L = S.wx.live;
+  return {source:{name:L.source, location:L.location, fetched_at:S.wx.mode === "imd" ? null : L.fetched_at}, start:isoLocal(clockAt(S.t)),
+    rain_upper_mm_hourly: L.rain_upper_mm_hourly ? liveSlice("rain_upper_mm_hourly") : undefined,
+    tmax:[0,1,2].map(k => Math.max(...win(k))), tmin:[0,1,2].map(k => Math.min(...win(k))), rain_mm_hourly:w.rain};
+}
+function buildRequest(){
+  return {
+    field:{crop:S.crop, stage:STAGE_KEYS[stageIdx(S.crop, S.day)], area_acres:S.area, pump_lpm:S.flow * 60, latitude:13.63},
+    probes: probeReadings(), npk:{N:S.N, P:S.P, K:S.K},
+    weather: weatherForRequest(),
+  };
+}
+async function refresh(){
+  const my = ++seq; last = null;
+  try {
+    const r = await fetch("/api/advice", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(buildRequest())});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    const data = await r.json();
+    if (my !== seq) return;
+    last = data; el("banner").hidden = true; render(data);
+  } catch (e) {
+    if (my !== seq) return;
+    el("banner").hidden = false; el("banner").textContent = "Cannot reach the Kisan Mitra API (" + e.message + "). Start the server: uvicorn app.main:app";
+  }
+}
+
+/* ---------- rendering ---------- */
+const sensorOf = (D, id) => D.decision.sensor_health.faulty.find(f => f.id === id);
+
+function renderInputs(D){
+  const c = CROPS[S.crop], st = stageIdx(S.crop, S.day);
+  const probes = probeReadings();
+  el("probes").innerHTML = probes.map(p => { const f = sensorOf(D, p.id), v = p.readings[p.readings.length-1];
+    return `<div class="probe ${f?"bad":""}"><div class="v">${v.toFixed(1)}%</div><div class="n">Probe ${p.id}${f?" · fault":""}</div></div>`; }).join("");
+  const set = (id, v, txt) => { const i = el("in-"+id); if (document.activeElement !== i) i.value = v; el("o-"+id).textContent = txt; };
+  set("m", S.theta.toFixed(1), S.theta.toFixed(1) + " %");
+  set("n", Math.round(S.N), Math.round(S.N) + " kg/ha"); set("p", Math.round(S.P), Math.round(S.P) + " kg/ha"); set("k", Math.round(S.K), Math.round(S.K) + " kg/ha");
+  set("t", S.tmax, S.tmax.toFixed(1) + " °C");
+  const rm = S.rain && S.rain.at + S.rain.dur > S.t ? S.rain.mm : 0, rh = S.rain ? Math.max(1, S.rain.at - S.t) : 24;
+  set("r", rm, rm ? rm + " mm" : "None"); set("rh", rh, rm ? (S.rain.at <= S.t ? "Raining now" : rh + " h") : "–");
+  const live = isLive();
+  el("in-rh").disabled = live || !rm; el("in-t").disabled = live; el("in-r").disabled = live;
+  if (live){ el("o-t").textContent = "live"; el("o-r").textContent = "live"; el("o-rh").textContent = "live"; }
+  el("in-fault").checked = S.fault;
+  el("stage").textContent = `${c.name_en} · ${STAGE_NAMES[st]} stage · crop coefficient ${c.kc[STAGE_KEYS[st]]} · roots ~${c.root_depth_mm/10} cm`;
+  el("in-day").value = String(Math.min(Math.floor(c.season_days/5)*5, Math.round(S.day/5)*5));
+}
+
+function renderChart(D){
+  const irr = D.decision.irrigation, svg = el("chart"), W = 640, H = 270, L = 40, R = 14, T = 12, B = 46;
+  if (!irr.trajectory.length){ svg.innerHTML = `<text x="20" y="40" fill="var(--muted)" font-size="13">No forecast: no reliable sensor reading.</text>`; el("facts").innerHTML = ""; return; }
+  const tr = irr.trajectory.map(p => ({t:S.t + p.hour, v:p.moisture, rain:p.rain_mm}));
+  const withA = irr.trajectory_with_irrigation && irr.trajectory_with_irrigation.map(p => ({t:S.t + p.hour, v:p.moisture}));
+  const refill = irr.refill_point, fc = irr.field_capacity, crit = irr.critical_point;
+  const x0 = S.t - 24, x1 = S.t + 72, ymin = Math.max(0, Math.min(crit - 4, ...S.hist.map(p=>p.v), ...tr.map(p=>p.v)) - 2), ymax = Math.max(fc + 3, ...S.hist.map(p=>p.v)) ;
+  const X = t => L + (t - x0) / (x1 - x0) * (W - L - R), Y = v => T + (1 - (v - ymin) / (ymax - ymin)) * (H - T - B);
+  const path = pts => pts.map((p,i)=>(i?"L":"M")+X(p.t).toFixed(1)+","+Y(p.v).toFixed(1)).join("");
+  const mono = `font-family="IBM Plex Mono, monospace"`;
+  let s = "";
+  for (let v = Math.ceil(ymin/5)*5; v <= ymax; v += 5) s += `<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)" ${mono}>${v}%</text>`;
+  s += `<rect x="${L}" width="${W-L-R}" y="${Y(fc)}" height="${Y(refill)-Y(fc)}" fill="var(--good-bg)" opacity=".85"/>`;
+  s += `<line x1="${L}" x2="${W-R}" y1="${Y(refill)}" y2="${Y(refill)}" stroke="var(--good)" stroke-dasharray="5 4"/>`;
+  s += `<text x="${W-R-4}" y="${Y(refill)-5}" text-anchor="end" font-size="11" fill="var(--good)">refill point ${refill}%</text>`;
+  s += `<line x1="${L}" x2="${W-R}" y1="${Y(crit)}" y2="${Y(crit)}" stroke="var(--bad)" stroke-dasharray="2 4"/>`;
+  s += `<text x="${W-R-4}" y="${Y(crit)-5}" text-anchor="end" font-size="11" fill="var(--bad)">stress ${crit}%</text>`;
+  const base = H - B;
+  tr.forEach((p, i) => { if (i > 0 && p.rain > 0){ const bh = Math.min(30, p.rain * 4); s += `<rect x="${X(p.t-1)}" y="${base-bh}" width="${Math.max(2,X(p.t)-X(p.t-1)-0.5)}" height="${bh}" fill="var(--water)" opacity=".35"/>`; } });
+  for (let h = -24; h <= 72; h += 24){ const xx = X(S.t + h); s += `<line x1="${xx}" x2="${xx}" y1="${T}" y2="${base}" stroke="var(--line)"/><text x="${xx}" y="${base+16}" text-anchor="${h===72?"end":h===-24?"start":"middle"}" font-size="11" fill="var(--muted)" ${mono}>${h===0?"now":(h>0?"+":"")+h+" h"}</text>`; }
+  s += `<line x1="${X(S.t)}" x2="${X(S.t)}" y1="${T}" y2="${base}" stroke="var(--ink)" stroke-width="1.5"/>`;
+  const cur = tr[0].v, hist = S.hist.filter(p => p.t >= x0);
+  s += `<path d="${path(hist.concat([{t:S.t, v:cur}]))}" fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  s += `<path d="${path(tr)}" fill="none" stroke="var(--water)" stroke-width="2" stroke-dasharray="6 5" opacity=".75"/>`;
+  if (withA){
+    s += `<path d="${path(withA)}" fill="none" stroke="var(--leaf)" stroke-width="2.6"/>`;
+    const at = S.t + irr.start_in_hours;
+    s += `<circle cx="${X(at)}" cy="${Y(tr[irr.start_in_hours].v)}" r="5" fill="var(--leaf)"/>`;
+    s += `<text x="${Math.min(X(at)+8, W-R-110)}" y="${T+14}" font-size="11.5" fill="var(--leaf)" font-weight="600">irrigate ${Math.round(irr.net_mm)} mm</text>`;
+  }
+  s += `<circle cx="${X(S.t)}" cy="${Y(cur)}" r="5" fill="var(--ink)"/>`;
+  s += `<text x="${L}" y="${H-8}" font-size="11" fill="var(--muted)">Soil moisture (% by volume) · past 24 h and next 72 h</text>`;
+  svg.innerHTML = s;
+  const hrs = irr.hours_to_refill;
+  el("facts").innerHTML = [
+    ["Water use today", irr.water_use_mm_day.toFixed(1) + " mm"],
+    ["Next 24 h change", ((tr[24].v - tr[0].v) >= 0 ? "+" : "") + (tr[24].v - tr[0].v).toFixed(1) + " %"],
+    ["Hits refill point", hrs == null ? "not in 72 h" : "in " + hrs + " h"],
+  ].map(([k,v]) => `<div class="fact"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+function renderDecisionWater(D){
+  const irr = D.decision.irrigation, c = CROPS[S.crop], dec = el("dec-water"), usualL = c.usual_irrigation_mm * S.area * ACRE;
+  const m = D.advice.messages.find(x => x.domain === "water");
+  let cls, html;
+  switch (irr.action){
+    case "irrigate_now": cls = "bad"; html = `<strong>Irrigate now: ${Math.round(irr.net_mm)} mm</strong>${fmtL(irr.litres)} L, about ${irr.pump_minutes} min of pumping. Moisture is near the stress level. Every hour of delay costs yield.`; break;
+    case "irrigate_evening": cls = "warn"; html = `<strong>${esc(m.en.title)}: ${Math.round(irr.net_mm)} mm</strong>${fmtL(irr.litres)} L, about ${irr.pump_minutes} min of pumping. Evening watering loses less to evaporation.`; break;
+    case "wait_rain": cls = "info"; html = `<strong>Skip irrigation, rain is coming</strong>${irr.rain_next_24h_mm} mm expected in 24 h refills the soil. Saves ~${fmtL(usualL)} L compared with the usual schedule.`; break;
+    case "no_data": cls = "bad"; html = `<strong>No advice</strong>No sensor is giving a reliable reading. Check the probes.`; break;
+    default: cls = "good"; html = `<strong>No irrigation needed</strong>Soil stays in the healthy range ${irr.hours_to_refill == null ? "for the next 3 days" : "for about " + Math.max(1, Math.round(irr.hours_to_refill/24)) + " day(s)"}.`;
+  }
+  dec.className = "decision " + cls; dec.innerHTML = html;
+}
+
+function renderNut(D){
+  const n = D.decision.nutrients, c = CROPS[S.crop], AXIS = {N:[0,500], P:[0,90], K:[0,400]}, COL = {N:"var(--leaf)", P:"var(--soil)", K:"var(--water)"};
+  const st = n.status || {};
+  el("npk").innerHTML = ["N","P","K"].filter(k => st[k]).map(k => { const s = st[k], [lo,hi] = AXIS[k], p = x => (Math.max(0,Math.min(100,(x-lo)/(hi-lo)*100))).toFixed(1);
+    return `<div class="bar"><b>${k}</b><div class="track"><div class="band" style="left:${p(s.low)}%;width:${p(s.high)-p(s.low)}%"></div><div class="dot" style="left:${p(s.value)}%;background:${s.state==="ok"?"var(--good)":s.state==="low"?"var(--warn)":"var(--water)"}"></div></div><span class="val">${Math.round(s.value)} <span class="pill ${s.state==="ok"?"good":"warn"}">${s.state}</span></span></div>`; }).join("");
+  const dec = el("dec-nut"), doses = n.doses.map(d => `${d.kg_per_acre} kg ${d.product === "mop" ? "MOP" : d.product === "dap" ? "DAP" : "urea"}`).join(" + ");
+  const capped = n.doses.some(d => d.capped);
+  let cls, html;
+  if (n.action === "hold_rain"){ cls = "info"; html = `<strong>Hold fertiliser until after the rain</strong>${n.rain_next_48h_mm} mm due in 48 h would wash nitrogen into streams and groundwater.`; }
+  else if (n.action === "apply"){ cls = "warn"; html = `<strong>Apply ${doses} per acre</strong>Targeted dose${capped ? ", capped at the per-application split limit" : ""}. Usual blanket dose: ${c.usual_urea_kg_acre} kg urea.`; }
+  else { cls = "good"; html = `<strong>No fertiliser needed</strong>All nutrients are inside the target range for the ${STAGE_NAMES[stageIdx(S.crop,S.day)].toLowerCase()} stage.`; }
+  dec.className = "decision " + cls; dec.innerHTML = html;
+}
+
+const isDay = () => { const hod = clockAt(S.t).getHours(); return hod >= 7 && hod < 18; };
+function renderHealth(D){
+  const sh = D.decision.sensor_health, probes = probeReadings();
+  el("health").innerHTML = probes.map(p => { const f = sensorOf(D, p.id), v = p.readings[p.readings.length-1];
+    return `<div class="hrow"><span>Moisture probe ${p.id} · <span class="mono">${v.toFixed(1)}%</span>${f?` · excluded (${esc(REASON[f.reason] || f.reason)})`:""}</span><span class="pill ${f?"bad":"good"}">${f?"Anomaly":"Healthy"}</span></div>`; }).join("")
+    + `<div class="hrow"><span>NPK probe · check against Soil Health Card lab test</span><span class="pill info">Needs lab calibration</span></div>`
+    + `<div class="hrow"><span>Battery <span class="mono">${S.bat.toFixed(2)} V</span> · solar ${isDay() ? "charging" : "idle (night)"}</span><span class="pill ${S.bat>3.6?"good":"warn"}">${S.bat>3.6?"OK":"Low"}</span></div>`;
+}
+
+function renderPhone(D){
+  const now = clockAt(S.t), ms = D.advice.messages;
+  el("ph-time").textContent = now.toLocaleTimeString("en-IN", {hour:"2-digit", minute:"2-digit"});
+  el("ph-sub").textContent = `Ramaiah's field · ${CROPS[S.crop].name_en} · ${S.area} acre`;
+  el("msgs").innerHTML = ms.map((m, idx) => {
+    const key = m.code + ":" + m.en.text, done = S.handled[key], [tone, tag] = TONE[m.code] || ["#7CCB80", m.domain];
+    const main = S.lang === "te"
+      ? `<div class="te" lang="te">${esc(m.te.text)}</div><div class="en">${esc(m.en.text)}</div>`
+      : `<div style="font-size:15.5px">${esc(m.en.text)}</div>`;
+    const why = S.lang === "te" ? `<span class="te" lang="te">${esc(m.te.why)}</span><div class="en">${esc(m.en.why)}</div>` : esc(m.en.why);
+    const labels = D.advice.buttons[S.lang];
+    const ref = m.reference ? `<div class="ref">&#128225; ${S.lang === "te" ? `<span class="te" lang="te">${esc(m.reference.te)}</span>` : esc(m.reference.en)}</div>` : "";
+    return `<div class="msg"><div class="tag" style="color:${tone}"><span class="d" style="background:${tone}"></span>${tag}</div>${main}<div class="why"><b>${S.lang === "te" ? "కారణం" : "Why"}:</b> ${why}</div>${ref}
+      <div class="acts">${m.actionable ? (done ? `<span style="font-size:13px;opacity:.8">✓ ${esc(done)}</span>` : `<button class="ok" data-act="done" data-i="${idx}">${labels.done}</button><button data-act="skip" data-i="${idx}">${labels.skip}</button>`) : ""}
+      <button data-act="speak" data-i="${idx}">▶ ${S.lang === "te" ? "వినండి" : "Listen"}</button></div></div>`; }).join("");
+  const sms = D.advice.sms[S.lang];
+  el("sms").textContent = `${now.toLocaleDateString("en-IN", {day:"2-digit", month:"short"})}\n` + sms.text;
+  el("sms-meta").textContent = `${sms.chars} characters · ${sms.segments} SMS` + (S.lang === "te" ? " (Telugu SMS fits 70 characters per message)" : "");
+}
+
+function renderImpact(){
+  const c = CROPS[S.crop], prog = Math.min(1, S.day / c.season_days);
+  const seedW = 1460000 * prog * S.area, seedU = 25 * prog * S.area;   // per-acre season estimates from the project brief (unvalidated)
+  const w = seedW + S.saved.w, u = seedU + S.saved.u, kwh = w * 0.2 / 1000, co2 = kwh * 0.71 + u * 4.2;
+  el("k-w").textContent = fmtL(w); el("k-u").textContent = u.toFixed(1); el("k-e").textContent = fmt(kwh); el("k-c").textContent = fmt(co2);
+  el("fb").textContent = `Feedback: ${S.fbDone + S.fbSkip} actions logged (${S.fbDone} done)`;
+}
+const renderFeed = () => { el("feed").textContent = S.feed.slice(-40).reverse().join("\n"); };
+const renderClock = () => { el("clock").textContent = clockAt(S.t).toLocaleString("en-IN", {weekday:"short", day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"}); };
+
+const imdCat = d => { const key = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, f = S.wx.live.daily.find(x => x.date === key); return f ? f.imd_category : "beyond bulletin"; };
+const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function renderWeather(){
+  const w = weatherSeries(), svg = el("wx-chart"), W = 640, H = 230, L = 38, R = 40, T = 14, B = 34, live = isLive();
+  const tmin = Math.floor(Math.min(...w.temp) - 1), tmax = Math.ceil(Math.max(...w.temp) + 1), rmax = Math.max(4, Math.ceil(Math.max(...w.rain)));
+  const X = h => L + h / 72 * (W - L - R), YT = v => T + (1 - (v - tmin) / (tmax - tmin)) * (H - T - B), YR = v => (H - B) - v / rmax * (H - T - B) * 0.55;
+  const mono = `font-family="IBM Plex Mono, monospace"`;
+  let g = "";
+  for (let v = Math.ceil(tmin/2)*2; v <= tmax; v += 2) g += `<line x1="${L}" x2="${W-R}" y1="${YT(v)}" y2="${YT(v)}" stroke="var(--line)"/><text x="${L-6}" y="${YT(v)+4}" text-anchor="end" font-size="11" fill="var(--soil)" ${mono}>${v}°</text>`;
+  for (let v = 0; v <= rmax; v += Math.max(1, Math.round(rmax/3))) g += `<text x="${W-R+6}" y="${YR(v)+4}" font-size="11" fill="var(--water)" ${mono}>${v}</text>`;
+  g += `<text x="${W-R+6}" y="${T+2}" font-size="10.5" fill="var(--water)">mm/h</text>`;
+  // midnight lines + day labels
+  for (let h = 0; h <= 72; h++){ const d = clockAt(S.t + h); if (d.getHours() === 0 && h > 0) g += `<line x1="${X(h)}" x2="${X(h)}" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-dasharray="3 4" opacity=".6"/><text x="${X(h)+4}" y="${H-B+14}" font-size="11" fill="var(--muted)">${WD[d.getDay()]} ${d.getDate()}</text>`; }
+  for (let h = 0; h <= 72; h += 12){ const d = clockAt(S.t + h); g += `<text x="${X(h)}" y="${H-6}" text-anchor="${h===72?"end":h===0?"start":"middle"}" font-size="11" fill="var(--muted)" ${mono}>${h===0?"now":pad(d.getHours())+":00"}</text>`; }
+  const bw = Math.max(2, (W-L-R)/72 - 1);
+  w.rain.forEach((r, h) => { if (r > 0){ const y = YR(r); g += `<rect x="${X(h)}" y="${y}" width="${bw}" height="${H-B-y}" fill="var(--water)" opacity=".5"/>`; } });
+  g += `<path d="${w.temp.map((v,h) => (h?"L":"M")+X(h).toFixed(1)+","+YT(v).toFixed(1)).join("")}" fill="none" stroke="var(--soil)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  g += `<line x1="${X(0)}" x2="${X(0)}" y1="${T}" y2="${H-B}" stroke="var(--ink)" stroke-width="1.5"/>`;
+  const hi = w.temp.indexOf(Math.max(...w.temp)); g += `<circle cx="${X(hi)}" cy="${YT(w.temp[hi])}" r="4" fill="var(--soil)"/><text x="${X(hi)}" y="${YT(w.temp[hi])-8}" text-anchor="middle" font-size="11" fill="var(--soil)" font-weight="600">${w.temp[hi].toFixed(0)}°</text>`;
+  // hover titles, one invisible column per hour
+  w.temp.forEach((v, h) => { const d = clockAt(S.t + h); g += `<rect x="${X(h)-0.5}" y="${T}" width="${bw+1}" height="${H-T-B}" fill="transparent"><title>${WD[d.getDay()]} ${pad(d.getHours())}:00 · ${v.toFixed(1)} °C · ${w.rain[h].toFixed(1)} mm${w.prob ? " · " + Math.round(w.prob[h]) + "% chance" : ""}</title></rect>`; });
+  svg.innerHTML = g;
+
+  // day tiles (calendar days within the 72 h window)
+  const days = {};
+  w.temp.forEach((v, h) => { const d = clockAt(S.t + h), k = d.toDateString(); (days[k] = days[k] || {d, t:[], r:0, p:0}); days[k].t.push(v); days[k].r += w.rain[h]; if (w.prob) days[k].p = Math.max(days[k].p, w.prob[h]); });
+  el("wx-days").innerHTML = Object.values(days).slice(0, 3).map((x, i) => `<div class="day"><div class="k">${i === 0 ? "Today (rest)" : WD[x.d.getDay()] + " " + x.d.getDate()}</div><div class="v">${Math.round(Math.max(...x.t))}° / ${Math.round(Math.min(...x.t))}°</div><div class="r">${x.r.toFixed(1)} mm${w.prob ? " · " + Math.round(x.p) + "%" : ""}</div>${S.wx.mode === "imd" ? `<div class="k">${esc(imdCat(x.d))}</div>` : ""}</div>`).join("");
+
+  const L2 = S.wx.live, src = el("wx-src"), st = el("wx-status"), imd = S.wx.mode === "imd";
+  src.className = "pill " + (live ? "good" : "info"); src.textContent = live ? (imd ? "IMD · entered" : L2.source + " · live") : "Simulated";
+  const t = x => new Date(x).toLocaleTimeString("en-IN", {hour:"2-digit", minute:"2-digit"});
+  if (live && imd){
+    st.className = "wxstatus";
+    st.textContent = `${L2.location} · official IMD forecast entered by the user${L2.issued_on ? " (bulletin " + L2.issued_on + ")" : ""} · rain spread evenly over each day.`;
+  } else if (live){
+    st.className = "wxstatus" + (L2.warning ? " warn" : "");
+    st.textContent = `${L2.location} · synced ${t(L2.fetched_at)} · forecast from ${t(L2.start)}` + (L2.approximate_after_hours ? ` · hours after +${L2.approximate_after_hours} h are estimated from daily totals` : "") + (L2.warning ? ` · ${L2.warning}` : "") + " · Re-syncs every 15 min.";
+  } else {
+    st.className = "wxstatus" + (S.wx.err ? " warn" : "");
+    st.textContent = S.wx.err ? S.wx.err : "Simulated weather from the temperature and rain sliders.";
+  }
+  el("wx-sync").disabled = S.wx.mode !== "live"; el("wx-loc").disabled = false;
+  el("imd-form").hidden = S.wx.ui !== "imd";
+  document.querySelectorAll("[data-wx]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.wx === S.wx.ui)));
+}
+
+function renderRefs(D, fresh){
+  const r = D.decision.weather_ref, L = S.wx.live, live = r.live && L;
+  const t = x => new Date(x).toLocaleTimeString("en-IN", {hour:"2-digit", minute:"2-digit"});
+  const link = live ? (L.source === "AccuWeather" ? "https://www.accuweather.com/en/in/india-weather" : "https://open-meteo.com") : null;
+  const imd = S.wx.mode === "imd";
+  const head = live && imd ? `&#128225; Engine input: <b>official IMD forecast</b> for ${esc(L.location)}${L.issued_on ? ", bulletin of " + esc(L.issued_on) : ""}, entered manually (<a href="https://mausam.imd.gov.in" target="_blank" rel="noopener">mausam.imd.gov.in</a>). Soil sensors are simulated.`
+             : live ? `&#128225; Engine input: <b>live ${esc(L.source)} forecast</b>, ${esc(L.location)}, synced ${t(L.fetched_at)} (<a href="${link}" target="_blank" rel="noopener">source</a>). Soil sensors are simulated.`
+                    : `Engine input: <b>simulated weather</b> from the sliders.`;
+  const peak = r.peak_rain_in_h == null ? "no rain expected" : `peak ${r.peak_rain_mm_h} mm/h in ${r.peak_rain_in_h} h`;
+  const water = `${head}<br>IMD rain category, next 24 h: <b>${esc(r.rain_24h_imd_class)}</b>. Rain: ${r.rain_24h_mm} mm in 24 h · ${r.rain_48h_mm} mm in 48 h · ${r.rain_72h_mm} mm in 72 h (${peak}). High ${r.tmax_today}°C, reference ET0 ${r.et0_mm_day} mm/day.`;
+  const nut = `${head}<br>Rain in next 48 h: ${r.rain_48h_mm} mm${imd ? " (upper bound of the IMD category is used for this check)" : ""} (fertiliser is held at 15 mm or more).`;
+  [["ref-water", water], ["ref-nut", nut]].forEach(([id, html]) => { const e = el(id); e.innerHTML = html; e.className = "refline" + (live ? " live" : "") + (fresh ? " flash" : ""); });
+}
+
+function render(D){
+  renderWeather(); renderRefs(D, S.wx.justSynced); S.wx.justSynced = false; renderClock(); renderInputs(D); renderChart(D); renderDecisionWater(D); renderNut(D); renderHealth(D); renderPhone(D); renderImpact(); renderFeed();
+  el("bat").textContent = `Battery ${S.bat.toFixed(2)} V`;
+}
+
+/* ---------- simulation ---------- */
+function packet(){
+  const ps = probeReadings(), d = clockAt(S.t);
+  return JSON.stringify({node:"KM-01", ts:`${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    m:ps.map(p => p.readings[p.readings.length-1]), n:Math.round(S.N), p:Math.round(S.P), k:Math.round(S.K), bat:+S.bat.toFixed(2), rssi:-90 - Math.round(Math.abs(nz(S.t, 5)) * 20)});
+}
+function rainAt(h){ if (isLive()) return S.wx.live.rain_mm_hourly[h] || 0; const r = S.rain; return r && h >= r.at && h < r.at + r.dur ? r.mm / r.dur : 0; }
+function tick(){
+  if (!last) return;                      // wait for a fresh engine response for the current inputs
+  const traj = last.decision.irrigation.trajectory;
+  S.hist.push({t:S.t, v:S.theta});
+  S.t += 1;
+  if (traj.length > 1) S.theta = traj[1].moisture;
+  S.N = Math.max(100, S.N - 0.4 - rainAt(S.t) * 0.4); S.P = Math.max(2, S.P - 0.03); S.K = Math.max(40, S.K - 0.12);
+  S.bat = Math.max(3.3, Math.min(4.15, S.bat + (isDay() ? 0.012 : -0.006)));
+  if (S.t % 24 === 0) S.day = Math.min(CROPS[S.crop].season_days, S.day + 1);
+  if (S.wx.mode === "live" && S.t >= 24) { syncLive(); return; }   // forecast window used up: pull a fresh one
+  if (S.wx.mode === "imd" && S.t >= 24) { S.running = false; el("play").textContent = "Play"; schedule(); toast("The entered IMD forecast window is used up. Enter the latest bulletin."); }
+  if (S.rain && S.t >= S.rain.at + S.rain.dur) S.rain = null;
+  S.hist = S.hist.filter(p => p.t >= S.t - 30);
+  S.feed.push(packet()); refresh();
+}
+function seedHistory(){   // plausible past 24 h: drying fastest in daylight
+  let th = S.theta; const back = [];
+  for (let i = 0; i < 24; i++){ const hod = clockAt(S.t - i).getHours(); th += 0.05 + 0.5 * Math.max(0, Math.sin(Math.PI * (hod - 6) / 12)) * 0.5; back.push({t:S.t - i - 1, v:Math.min(46, th)}); }
+  S.hist = back.reverse(); S.feed = [packet()];
+}
+let timer = null;
+const schedule = () => { clearInterval(timer); if (S.running) timer = setInterval(tick, 2000 / S.speed); };
+
+/* ---------- scenarios (same seven as the API fixtures) ---------- */
+const band = () => { const c = CROPS[S.crop], b = c.npk_band[STAGE_KEYS[stageIdx(S.crop, S.day)]]; return {N:b.N, P:b.P, K:b.K, refill:c.refill_point, fc:c.field_capacity, crit:c.wilting_point + 0.3 * (c.refill_point - c.wilting_point)}; };
+const SCEN = [
+  {id:"normal", name:"Normal day", f:b => ({theta:b.refill+6, N:b.N[0]+30, P:b.P[0]+8, K:b.K[0]+40, tmax:32, rain:null, fault:false})},
+  {id:"dry", name:"Dry spell", f:b => ({theta:b.refill+1.8, N:b.N[0]+25, P:b.P[0]+8, K:b.K[0]+40, tmax:35, rain:null, fault:false})},
+  {id:"rain", name:"Rain coming", f:b => ({theta:b.refill+1.8, N:b.N[0]+25, P:b.P[0]+8, K:b.K[0]+40, tmax:33, rain:{rel:10, mm:24, dur:5}, fault:false})},
+  {id:"lowN", name:"Low nitrogen", f:b => ({theta:b.refill+6, N:b.N[0]-60, P:b.P[0]-6, K:b.K[0]+30, tmax:32, rain:null, fault:false})},
+  {id:"lowNrain", name:"Low N + heavy rain", f:b => ({theta:b.refill+6, N:b.N[0]-60, P:b.P[0]+6, K:b.K[0]+30, tmax:30, rain:{rel:14, mm:40, dur:6}, fault:false})},
+  {id:"fault", name:"Faulty sensor", f:b => ({theta:b.refill+5, N:b.N[0]+25, P:b.P[0]+8, K:b.K[0]+40, tmax:32, rain:null, fault:true})},
+  {id:"crit", name:"Critical dry", f:b => ({theta:b.crit-0.6, N:b.N[0]+20, P:b.P[0]+8, K:b.K[0]+40, tmax:37, rain:null, fault:false})},
+];
+let activeScen = "dry";
+function applyScenario(id){
+  activeScen = id; const v = SCEN.find(s => s.id === id).f(band());
+  Object.assign(S, {theta:v.theta, N:v.N, P:v.P, K:v.K, tmax:v.tmax, fault:v.fault});
+  S.rain = v.rain ? {at:S.t + v.rain.rel, mm:v.rain.mm, dur:v.rain.dur} : null;
+  seedHistory(); S.handled = {};
+  document.querySelectorAll("#scenarios .chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === id)));
+  refresh();
+}
+const clearScenChip = () => document.querySelectorAll("#scenarios .chip").forEach(b => b.setAttribute("aria-pressed", "false"));
+
+/* ---------- wiring ---------- */
+let toastT; function toast(t){ el("toast").textContent = t; clearTimeout(toastT); toastT = setTimeout(() => el("toast").textContent = "", 4500); }
+const post = (path, body) => fetch(path, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)}).catch(() => {});
+
+function fillDays(){ const c = CROPS[S.crop]; el("in-day").innerHTML = Array.from({length:Math.floor(c.season_days/5)+1}, (_, i) => i*5).map(d => `<option value="${d}">Day ${d} · ${STAGE_NAMES[stageIdx(S.crop,d)]}</option>`).join(""); }
+
+async function syncLive(){
+  const w = S.wx; el("wx-sync").disabled = true; el("wx-status").textContent = "Syncing live forecast...";
+  try {
+    const r = await fetch(`/api/weather/live?location=${w.loc}&provider=${w.prov}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    w.live = await r.json(); w.mode = "live"; w.ui = "live"; w.err = null; w.justSynced = true;
+    S.startDate = new Date(w.live.start); S.t = 0; S.hist = []; seedHistory();
+    S.running = false; el("play").textContent = "Play"; el("play").setAttribute("aria-pressed", "false"); schedule();
+    clearInterval(w.syncTimer); w.syncTimer = setInterval(syncLive, 15 * 60e3);
+  } catch (e) {
+    w.ui = w.mode;
+    if (!w.live) { w.mode = "sim"; w.ui = "sim"; w.err = "Live forecast unavailable (" + e.message + "). Staying on simulated weather."; }
+    else w.err = "Re-sync failed (" + e.message + "); keeping the last forecast.";
+    toast(w.err);
+  }
+  refresh();
+}
+async function applyImd(){
+  const w = S.wx, days = [...document.querySelectorAll("#imd-rows .imdrow")].map(r => ({tmax:+r.querySelector(".i-max").value, tmin:+r.querySelector(".i-min").value, rain_category:r.querySelector(".i-cat").value}));
+  try {
+    const r = await fetch("/api/weather/imd", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({location:w.loc, days, issued_on:el("imd-date").value || null})});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    w.live = await r.json(); w.mode = "imd"; w.ui = "imd"; w.err = null; w.justSynced = true; clearInterval(w.syncTimer);
+    S.startDate = new Date(w.live.start); S.t = 0; S.hist = []; seedHistory();
+    S.running = false; el("play").textContent = "Play"; el("play").setAttribute("aria-pressed", "false"); schedule();
+    toast("IMD forecast applied. The engine now uses it.");
+  } catch (e) { toast("Could not apply: " + (typeof e.message === "string" ? e.message : "check the values")); return; }
+  refresh();
+}
+function useSimulated(){
+  const w = S.wx; w.mode = "sim"; w.ui = "sim"; w.live = null; w.err = null; clearInterval(w.syncTimer);
+  S.startDate = new Date(); S.startDate.setHours(10, 0, 0, 0); S.t = 0; S.hist = [];
+  S.running = true; el("play").textContent = "Pause"; el("play").setAttribute("aria-pressed", "true"); schedule();
+  applyScenario(activeScen);
+}
+
+function onMessageClick(e){
+  const b = e.target.closest("button"); if (!b || !last) return;
+  const D = last, m = D.advice.messages[+b.dataset.i], c = CROPS[S.crop];
+  if (b.dataset.act === "speak"){ speak(S.lang === "te" ? m.te.text + " " + m.te.why : m.en.text + " " + m.en.why); return; }
+  const key = m.code + ":" + m.en.text, resp = b.dataset.act;
+  post("/api/feedback", {scenario_id:activeScen, advice_code:m.code, response:resp});
+  if (resp === "skip"){ S.fbSkip++; S.handled[key] = "Skipped · logged for model training"; toast("Logged as skipped. The model learns from this too."); render(D); return; }
+  S.fbDone++; let msg = "Logged. ";
+  const irr = D.decision.irrigation, usualL = c.usual_irrigation_mm * S.area * ACRE;
+  if (m.domain === "water"){
+    if (m.code === "wait_rain"){ S.saved.w += usualL; msg += `Saved ~${fmtL(usualL)} L vs. the usual schedule.`; }
+    else { const sv = Math.max(0, usualL - irr.litres); S.saved.w += sv; msg += sv > 0 ? `Used ${fmtL(irr.litres)} L instead of ~${fmtL(usualL)} L.` : "Irrigation recorded.";
+      S.hist.push({t:S.t, v:S.theta}); S.theta = Math.min(c.field_capacity, S.theta + irr.net_mm / c.root_depth_mm * 100); }
+  } else if (m.domain === "nutrient"){
+    if (m.code === "fert_hold") msg += "Fertiliser held until after the rain.";
+    else {
+      const d = Object.fromEntries(D.decision.nutrients.doses.map(x => [x.nutrient, x.kg_per_acre])), urea = d.N || 0;
+      const sv = Math.max(0, c.usual_urea_kg_acre - urea) * S.area; S.saved.u += sv;
+      S.N += urea * 0.46 / HA_PER_ACRE; S.P += (d.P || 0) * 0.46 / HA_PER_ACRE; S.K += (d.K || 0) * 0.6 / HA_PER_ACRE;
+      msg += `Applied ${urea} kg urea/acre instead of ${c.usual_urea_kg_acre}. ${sv.toFixed(0)} kg avoided.`;
+    }
+  }
+  S.handled[key] = "Done"; toast(msg); clearScenChip(); refresh();
+}
+
+function setTheme(mode){   // auto = follow the system; light / dark force it (CSS keys off data-theme)
+  if (mode === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", mode);
+  document.querySelectorAll("[data-theme-pick]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themePick === mode)));
+  try { localStorage.setItem("km-theme", mode); } catch (e) {}
+}
+
+function speak(text){
+  try {
+    if (!("speechSynthesis" in window)){ toast("Voice is not available in this browser."); return; }
+    const u = new SpeechSynthesisUtterance(text), vs = speechSynthesis.getVoices(), lang = S.lang === "te" ? "te" : "en";
+    const v = vs.find(v => v.lang && v.lang.toLowerCase().startsWith(lang === "te" ? "te" : "en-in")) || vs.find(v => v.lang && v.lang.toLowerCase().startsWith(lang));
+    if (v){ u.voice = v; u.lang = v.lang; } else { u.lang = lang === "te" ? "te-IN" : "en-IN"; if (lang === "te") toast("No Telugu voice on this device (the product uses Bhashini). Switch to English to listen."); }
+    u.rate = 0.95; speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch (err){ toast("Voice playback failed on this device."); }
+}
+
+async function init(){
+  CROPS = await (await fetch("/api/crops")).json();
+  el("scenarios").innerHTML = SCEN.map(s => `<button type="button" class="chip" data-id="${s.id}" aria-pressed="false">${s.name}</button>`).join("");
+  el("scenarios").addEventListener("click", e => { const b = e.target.closest(".chip"); if (b) applyScenario(b.dataset.id); });
+  el("in-crop").innerHTML = Object.entries(CROPS).map(([k,c]) => `<option value="${k}">${c.name_en} · ${c.name_te}</option>`).join("");
+  fillDays();
+  el("in-crop").addEventListener("change", e => { S.crop = e.target.value; fillDays(); S.day = Math.round(Math.min(S.day, CROPS[S.crop].season_days) / 5) * 5; applyScenario(activeScen); });
+  el("in-day").addEventListener("change", e => { S.day = +e.target.value; clearScenChip(); refresh(); });
+  el("in-area").addEventListener("change", e => { S.area = +e.target.value; refresh(); });
+  el("in-flow").addEventListener("change", e => { S.flow = +e.target.value; refresh(); });
+  const bind = (id, fn) => el("in-"+id).addEventListener("input", e => { fn(+e.target.value); clearScenChip(); if (id === "m") seedHistory(); refresh(); });
+  bind("m", v => S.theta = v); bind("n", v => S.N = v); bind("p", v => S.P = v); bind("k", v => S.K = v); bind("t", v => S.tmax = v);
+  bind("r", v => { if (v <= 0) S.rain = null; else if (!S.rain || S.rain.at + S.rain.dur <= S.t) S.rain = {at:S.t + 18, mm:v, dur:5}; else S.rain.mm = v; });
+  bind("rh", v => { if (S.rain) S.rain.at = S.t + v; });
+  el("in-fault").addEventListener("change", e => { S.fault = e.target.checked; clearScenChip(); refresh(); });
+  el("play").addEventListener("click", () => { S.running = !S.running; el("play").textContent = S.running ? "Pause" : "Play"; el("play").setAttribute("aria-pressed", String(S.running)); schedule(); });
+  document.querySelectorAll("[data-speed]").forEach(b => b.addEventListener("click", () => { S.speed = +b.dataset.speed; document.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); schedule(); }));
+  document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click", () => { S.lang = b.dataset.lang; document.querySelectorAll("[data-lang]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); if (last) render(last); }));
+  el("msgs").addEventListener("click", onMessageClick);
+  document.querySelectorAll("[data-wx]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.wx === "live") syncLive();
+    else if (b.dataset.wx === "imd") { S.wx.ui = "imd"; if (last) renderWeather(); }
+    else useSimulated();
+  }));
+  el("imd-apply").addEventListener("click", applyImd);
+  const cats = (await (await fetch("/api/imd/rain-classes")).json()).classes;
+  el("imd-rows").innerHTML = ["Today", "Day +1", "Day +2", "Day +3"].map(l => `<div class="imdrow"><span>${l}</span><input class="i-max" type="number" step="0.5" value="33" aria-label="${l} max temperature"><input class="i-min" type="number" step="0.5" value="24" aria-label="${l} min temperature"><select class="i-cat" aria-label="${l} IMD rain category">${cats.map(c => `<option value="${c.id}">${c.label} (${c.id === "none" ? "0" : c.lo + "-" + c.hi} mm)</option>`).join("")}</select></div>`).join("");
+  el("imd-date").value = new Date().toISOString().slice(0, 10);
+  el("wx-loc").addEventListener("change", e => { S.wx.loc = e.target.value; if (S.wx.mode === "live") syncLive(); });
+  el("wx-prov").addEventListener("change", e => { S.wx.prov = e.target.value; if (S.wx.mode === "live") syncLive(); });
+  el("wx-sync").addEventListener("click", syncLive);
+  document.querySelectorAll("[data-theme-pick]").forEach(b => b.addEventListener("click", () => setTheme(b.dataset.themePick)));
+  let saved = "auto"; try { saved = localStorage.getItem("km-theme") || "auto"; } catch (e) {}
+  setTheme(saved);
+  if ("speechSynthesis" in window) speechSynthesis.getVoices();
+  applyScenario("dry"); schedule();
+}
+init().catch(e => { el("banner").hidden = false; el("banner").textContent = "Cannot reach the Kisan Mitra API: " + e.message; });
+})();
+</script>
+</body>
+</html>
